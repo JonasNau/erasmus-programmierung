@@ -3,6 +3,24 @@
 #include <OneWire.h>
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
+// Blynk
+#define BLYNK_PRINT Serial
+
+/* Fill in information from Blynk Device Info here */
+#define BLYNK_TEMPLATE_ID           "TMPL4SfbZ8l6e"
+#define BLYNK_TEMPLATE_NAME         "Quickstart Template"
+#define BLYNK_AUTH_TOKEN            "hYfu9NySjTRQvfzF3nYyO9XIrf68A6g-"
+
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+// Your WiFi credentials.
+// Set password to "" for open networks.
+char ssid[] = "Gregor Hotspot";
+char pass[] = "Athosloko20";
+// ===
 
 int Programm_LED = 15;
 
@@ -14,11 +32,9 @@ Servo myServo;
 int Lichtsensor_Pin = 27;
 bool Is_Day = true;
 
-int Hygrometer_links_Pin = 26;
-int Hygrometer_rechts_Pin = 25;
-int Feuchtigkeit_links = 0;
-int Feuchtigkeit_rechts = 0;
-int Feuchtigkeit_absolut = 0;
+int Hygrometer = 26;
+int Feuchtigkeit = 0;
+
 int Gies_Delay = 0; 
 int max_Gies = 65;
 // 21 entspricht rund 1 min. Delay
@@ -26,20 +42,22 @@ int max_Gies = 65;
 // 112 = 5 min. Delay zwischen zwei Pumpendurchgängen
 
 int Temperatur_Pin = 19;
-int Temperatur_Boden = 0;
-int Temperatur_Luft = 0;
+int Temperatur = 0;
 OneWire oneWire(Temperatur_Pin);
 DallasTemperature Sensors(&oneWire);
 
 int Relais_Pin = 32;
 
 LiquidCrystal_I2C lcd(0x27,16,2);
-String Zeile1;
-String Zeile2;
+
+int Schalter = 5;
 
 int Read_Delay = 1000; // = 2000 weil die Temperatur sensoren auch noch 1000ms Zeit brauchen
 
 void setup() {
+// Blynk
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+// ===
 // Servo Setup
   ESP32PWM::allocateTimer(0);
   ESP32PWM::allocateTimer(1);
@@ -55,45 +73,32 @@ void setup() {
 // ===
   
   pinMode(Lichtsensor_Pin, INPUT);
-  pinMode(Hygrometer_links_Pin, INPUT);
-  pinMode(Hygrometer_rechts_Pin, INPUT);
+  pinMode(Hygrometer, INPUT);
   pinMode(Relais_Pin, OUTPUT);
   pinMode(Programm_LED, OUTPUT);
+  pinMode(Schalter, INPUT);
   digitalWrite(Relais_Pin, HIGH);
 
-  Serial.begin(9600);
+  Serial.begin(115200);
 }
 
-void Get_Temperatures()
+int Get_Temperatur_Luft()
 {
   Sensors.requestTemperatures();
   delay(1000);
-}
-int Get_Temperatur_Boden()
-{
   return Sensors.getTempCByIndex(0);
 }
-int Get_Temperatur_Luft()
+int Get_Feuchtigkeit()
 {
-  return Sensors.getTempCByIndex(1);
+  return map(analogRead(Hygrometer),0,4095,100,0);
 }
-int Get_Feuchtigkeit_rechts()
+int Get_Dach_Position(int Temp)
 {
-  return map(analogRead(Hygrometer_rechts_Pin),0,4095,100,0);
-}
-int Get_Feuchtigkeit_links()
-{
-  return map(analogRead(Hygrometer_links_Pin),0,4095,100,0);
-}
-int Get_Feuchtigkeit_absolut(int F_links, int F_rechts)
-{
-  int absolut = (F_links + F_rechts)/2;
-  return absolut;
-}
-int Get_Dach_Position(int T_Boden, int T_Luft)
-{
-  int absolut = (T_Boden + T_Luft)/2;
-  return map(absolut,20,30,0,120);
+  if(digitalRead(Schalter) == HIGH)
+  {
+    return 0;
+  }
+  return map(Temp,20,30,0,120);
 }
 bool Get_Day()
 {
@@ -117,6 +122,7 @@ void Set_Servo_Position(int Pos, int Delay_ms)
 }
 void Bewaesserung()
 {
+  Serial.print("Gießdelay: ");
   Serial.println(Gies_Delay);
   if(Gies_Delay == 0)
   {
@@ -130,44 +136,60 @@ void Bewaesserung()
     Gies_Delay = Gies_Delay -1;  
   }
 }
-void Display_Values(int F_links, int F_rechts, int T_Boden, int T_Luft)
+void Display_Values(int Feuchtigkeit, int Temp, int Delay, bool Day)
 {
   lcd.clear();
-  Zeile1 = "";
-  Zeile2 = "";
-  Zeile1 = Zeile1 + F_links + " / " + F_rechts;
-  Zeile2 = Zeile2 + T_Boden + " / " + T_Luft;
+  String Tag;
+  String F = "";
+  String T = "";
+  if (Day == HIGH)
+  {
+    Tag = "Nacht";  
+  }
+  else
+  {
+    Tag = "Tag";  
+  }
   lcd.setCursor(0,0);
-  lcd.print(Zeile1);
+  F = F + Feuchtigkeit + " %";
+  lcd.print(F);
+  lcd.setCursor(7,0);
+  lcd.print("|");
   lcd.setCursor(14,0);
-  lcd.print("|%");
+  lcd.print(Delay);
+  //lcd.setCursor(14,0);
+  //lcd.print("|%");
   lcd.setCursor(0,1);
-  lcd.print(Zeile2);
-  lcd.setCursor(14,1);
-  lcd.print("|C");
+  T = T + Temp + " C";
+  lcd.print(T);
+  lcd.setCursor(7,1);
+  lcd.print("|");
+  lcd.setCursor(11,1);
+  lcd.print(Tag);
+  //lcd.setCursor(14,1);
+  //lcd.print("|C");
 }
 
 void loop() {
   digitalWrite(Programm_LED, HIGH);
   // Werte einlesen
-  Feuchtigkeit_links = Get_Feuchtigkeit_links();
-  Feuchtigkeit_rechts = Get_Feuchtigkeit_rechts();
-  Get_Temperatures();
-  Temperatur_Boden = Get_Temperatur_Boden();
-  Temperatur_Luft = Get_Temperatur_Luft();
+  Feuchtigkeit = Get_Feuchtigkeit();
+  Temperatur = Get_Temperatur_Luft();
   Is_Day = Get_Day();
-
+  
   // Verarbeitung
-  Feuchtigkeit_absolut = Get_Feuchtigkeit_absolut(Feuchtigkeit_links, Feuchtigkeit_rechts);
-  Serial.println(Feuchtigkeit_absolut);
-  target_pos = Get_Dach_Position(Temperatur_Boden,Temperatur_Luft);
+  target_pos = Get_Dach_Position(Temperatur);
+  Serial.print("Errechnete Dachöffnung: ");
   Serial.println(target_pos);
 
   // Ausgabe / Display u. Aktoren
   Set_Servo_Position(target_pos, 75);
-  Display_Values(Feuchtigkeit_links,Feuchtigkeit_rechts,Temperatur_Boden,Temperatur_Luft);
-  if(Feuchtigkeit_absolut < 25 || Feuchtigkeit_links == 0 || Feuchtigkeit_rechts == 0){Bewaesserung();}
+  Display_Values(Feuchtigkeit,Temperatur,Gies_Delay,Is_Day);
+  if(Feuchtigkeit < 25){Bewaesserung();}
+  else{Gies_Delay = 0;}
 
+  Blynk.run();
+  
   digitalWrite(Programm_LED, LOW);
   delay(Read_Delay);
 }
