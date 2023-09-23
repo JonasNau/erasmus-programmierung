@@ -9,7 +9,7 @@
 /* Fill in information from Blynk Device Info here */
 #define BLYNK_TEMPLATE_ID           "TMPL4SfbZ8l6e"
 #define BLYNK_TEMPLATE_NAME         "Quickstart Template"
-#define BLYNK_AUTH_TOKEN            "hYfu9NySjTRQvfzF3nYyO9XIrf68A6g-"
+#define BLYNK_AUTH_TOKEN            "sDkjltm2LocJH4JmEVUyhkRIOWLyazBy"
 
 
 #include <WiFi.h>
@@ -32,7 +32,7 @@ Servo myServo;
 int Lichtsensor_Pin = 27;
 bool Is_Day = true;
 
-int Hygrometer = 26;
+int Hygrometer = 34;
 int Feuchtigkeit = 0;
 
 int Gies_Delay = 0; 
@@ -55,9 +55,7 @@ int Schalter = 5;
 int Read_Delay = 1000; // = 2000 weil die Temperatur sensoren auch noch 1000ms Zeit brauchen
 
 void setup() {
-// Blynk
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
-// ===
+
 // Servo Setup
   ESP32PWM::allocateTimer(0);
   ESP32PWM::allocateTimer(1);
@@ -80,6 +78,9 @@ void setup() {
   digitalWrite(Relais_Pin, HIGH);
 
   Serial.begin(115200);
+  // Blynk
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+// ===
 }
 
 int Get_Temperatur_Luft()
@@ -90,6 +91,7 @@ int Get_Temperatur_Luft()
 }
 int Get_Feuchtigkeit()
 {
+  Serial.println(analogRead(Hygrometer));
   return map(analogRead(Hygrometer),0,4095,100,0);
 }
 int Get_Dach_Position(int Temp)
@@ -188,6 +190,9 @@ void loop() {
   if(Feuchtigkeit < 25){Bewaesserung();}
   else{Gies_Delay = 0;}
 
+  Blynk.virtualWrite(V1, Temperatur);
+  Blynk.virtualWrite(V2, Feuchtigkeit);
+  Blynk.virtualWrite(V3, Is_Day);
   Blynk.run();
   
   digitalWrite(Programm_LED, LOW);
