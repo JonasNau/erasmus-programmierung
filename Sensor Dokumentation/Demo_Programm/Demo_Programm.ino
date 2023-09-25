@@ -79,6 +79,7 @@ void setup() {
 
   Serial.begin(115200);
   // Blynk
+  Display_Booting();
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 // ===
 }
@@ -98,9 +99,21 @@ int Get_Dach_Position(int Temp)
 {
   if(digitalRead(Schalter) == HIGH)
   {
-    return 0;
+    return 65;
   }
-  return map(Temp,20,30,0,120);
+
+
+  int position =  map(Temp,20,30,15,65);
+
+  if (position > 65) {
+    return 65;
+  }
+
+  if (position < 15) {
+    return 15;
+  }
+
+  return position;
 }
 bool Get_Day()
 {
@@ -129,7 +142,7 @@ void Bewaesserung()
   if(Gies_Delay == 0)
   {
     digitalWrite(Relais_Pin, LOW);
-    delay(1000);
+    delay(200);
     digitalWrite(Relais_Pin, HIGH);
     Gies_Delay = max_Gies;
   }
@@ -137,6 +150,14 @@ void Bewaesserung()
   {
     Gies_Delay = Gies_Delay -1;  
   }
+}
+
+void Display_Booting() {
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Connecting WiFi:");
+  lcd.setCursor(0, 1);
+  lcd.print(ssid);
 }
 void Display_Values(int Feuchtigkeit, int Temp, int Delay, bool Day)
 {
